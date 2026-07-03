@@ -366,7 +366,7 @@ stateDiagram-v2
 flowchart TD
     A[Start Evaluation Request] --> B[Retrieve Active Rules from Redis Cache]
     B --> C{Rules in Cache?}
-    C -- No -- --> D[Query PostgreSQL for Active Rules]
+    C -- No --> D[Query PostgreSQL for Active Rules]
     D --> E[Populate Redis Cache]
     E --> F[Combine with Target Request Metadata]
     C -- Yes --> F
@@ -788,7 +788,7 @@ flowchart TD
     A[Worker Picks Up Job] --> B{Process Execution}
     B -- Success --> C[Complete Job & Delete from Active Queue]
     B -- Failure --> D{Retry Count < Max Retries 3?}
-    D -- Yes -- --> E[Apply Exponential Backoff: delay = 2^retry * 1000ms]
+    D -- Yes --> E[Apply Exponential Backoff: delay = 2^retry * 1000ms]
     E --> F[Re-enqueue Job]
     D -- No --> G[Move Job to Dead Letter Queue DLQ]
     G --> H[Emit alert.dlq event to monitoring dashboard]
@@ -820,16 +820,13 @@ The system uses an asynchronous event architecture. When domain events occur, th
 
 ### 13.1 Platform Event Catalog
 
-```mermaid
-grid
-    RuleCreatedEvent : Dispatched when rule is first saved. Triggers draft audit log.
-    RuleUpdatedEvent : Dispatched on changes. Increments version and stores historic snapshot.
-    RulePublishedEvent : Dispatched when rule goes live. Invalidates Redis cache.
-    RuleExpiredEvent : Dispatched by schedule scheduler. Moves status to EXPIRED.
-    SimulationCreatedEvent : Enqueues new background task to simulation queue.
-    PriceCalculatedEvent : Dispatched after every lookup. Used for analytics and audit.
-    PromotionActivatedEvent : Fires when code is redeemed. Updates promotion usage counters.
-```
+*   **RuleCreatedEvent**: Dispatched when a rule is first saved. Triggers draft audit logging.
+*   **RuleUpdatedEvent**: Dispatched on modifications. Increments version and stores historical snapshot.
+*   **RulePublishedEvent**: Dispatched when a rule goes live. Invalidates the active Redis cache.
+*   **RuleExpiredEvent**: Dispatched by schedule manager when end date is reached. Sets status to EXPIRED.
+*   **SimulationCreatedEvent**: Enqueues new background scenario analysis tasks to BullMQ.
+*   **PriceCalculatedEvent**: Dispatched after every lookup. Used for analytical reporting and price auditing.
+*   **PromotionActivatedEvent**: Dispatched when promotion codes are redeemed. Updates usage metrics.
 
 ---
 
@@ -962,22 +959,22 @@ The system is deployed using Docker containers orchestrated by Amazon ECS or Kub
 graph TD
     Client[Client Traffic] --> Nginx[Nginx Load Balancer]
     
-    subgraph App Cluster (Horizontal Auto-scaling)
+    subgraph AppCluster ["App Cluster (Horizontal Auto-scaling)"]
         Nginx --> Instance1[NestJS Pod 1]
         Nginx --> Instance2[NestJS Pod 2]
     end
 
-    subgraph Cache & Queue Cluster
+    subgraph CacheQueueCluster ["Cache & Queue Cluster"]
         Instance1 --> RedisPool[(Redis Primary)]
         Instance2 --> RedisPool
         RedisPool <--> RedisReplica[(Redis Replica)]
     end
 
-    subgraph Database Layer
+    subgraph DatabaseLayer ["Database Layer"]
         Instance1 --> DBPrimary[(PostgreSQL Primary - Writes)]
         Instance2 --> DBPrimary
         DBPrimary -.-> DBReplica[(PostgreSQL Replica - Read Only)]
-        Instance1 -. Read Queries .-> DBReplica
+        Instance1 -. "Read Queries" .-> DBReplica
     end
 ```
 
